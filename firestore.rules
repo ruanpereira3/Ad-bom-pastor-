@@ -1,0 +1,154 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: users
+// Fields: uid, name, email, role, unitId, status, lastAccess, photoURL
+//
+// Collection: units
+// Fields: id, name, type, address
+//
+// Collection: prayer_requests
+// Fields: id, name, request, date, status
+//
+// Collection: finances
+// Fields: id, unitId, type, amount, date, description, contributorId
+//
+// Collection: baptisms
+// Fields: id, memberId, date, status
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && (
+        (request.auth.token.email == "ruanjaole@gmail.com" && request.auth.token.email_verified == true) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin_sede')
+      );
+    }
+    
+    function isPastor() {
+      return isAuthenticated() && (
+        isAdmin() || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         (getUserData().role == 'pastor_local' || getUserData().role == 'admin_sede'))
+      );
+    }
+    
+    function isSecretary() {
+      return isAuthenticated() && (
+        isAdmin() || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         (getUserData().role == 'secretary_sede' || getUserData().role == 'secretary_local'))
+      );
+    }
+    
+    function isTreasurer() {
+      return isAuthenticated() && (
+        isAdmin() || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         (getUserData().role == 'treasurer_sede' || getUserData().role == 'treasurer_local'))
+      );
+    }
+
+    function isUnitStaff(unitId) {
+      return isAuthenticated() && (
+        isAdmin() || (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (
+            getUserData().unitId == unitId || getUserData().role.includes('sede')
+          )
+        )
+      );
+    }
+
+    function isSedeStaff() {
+      return isAdmin() || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().role.includes('sede'));
+    }
+
+    // Validators
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'name', 'email', 'role', 'unitId', 'status']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.email is string && data.email.size() < 100 &&
+             data.role in ['admin_sede', 'secretary_sede', 'treasurer_sede', 'pastor_local', 'secretary_local', 'treasurer_local', 'member'] &&
+             data.status in ['active', 'less_active', 'inactive'] &&
+             data.unitId is string && data.unitId.size() < 50;
+    }
+
+    function isValidFinance(data) {
+      return data.keys().hasAll(['unitId', 'type', 'amount', 'date']) &&
+             data.amount is number && data.amount >= 0 && data.amount < 1000000 &&
+             data.type in ['tithe', 'offering', 'expense'] &&
+             data.unitId is string && data.unitId.size() < 50 &&
+             (!('description' in data) || (data.description is string && data.description.size() < 500));
+    }
+
+    function isValidPrayer(data) {
+      return data.keys().hasAll(['request', 'date', 'status']) &&
+             data.request is string && data.request.size() > 0 && data.request.size() < 2000 &&
+             (!('name' in data) || (data.name is string && data.name.size() < 100));
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isPastor() || isSecretary();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (
+        (isOwner(userId) && request.resource.data.role == 'member') || isSecretary()
+      );
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && (
+        (isOwner(userId) && request.resource.data.role == resource.data.role) || isSecretary()
+      );
+    }
+
+    match /units/{unitId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /prayers/{requestId} {
+      allow read: if isPastor() || isSecretary();
+      allow create: if true; // Public can request prayer
+      allow update, delete: if isPastor() || isSecretary();
+    }
+
+    match /finances/{financeId} {
+      allow read: if isTreasurer() || isPastor() || isUnitStaff(resource.data.unitId);
+      allow create: if (isTreasurer() || isPastor()) && isValidFinance(request.resource.data) && (isSedeStaff() || isUnitStaff(request.resource.data.unitId));
+      allow update: if (isTreasurer() || isPastor()) && isValidFinance(request.resource.data) && (isSedeStaff() || isUnitStaff(resource.data.unitId));
+      allow delete: if isAdmin();
+    }
+
+    match /baptisms/{baptismId} {
+      allow read: if isAdmin() || isSecretary();
+      allow write: if isAdmin() || isSecretary();
+    }
+
+    match /admin_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated(); // Allow logging actions
+      allow update, delete: if false; // Logs are immutable
+    }
+  }
+}

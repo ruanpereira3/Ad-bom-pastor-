@@ -1,0 +1,101 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Church member or staff profile",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { 
+          "type": "string", 
+          "enum": ["admin_sede", "secretary_sede", "treasurer_sede", "pastor_local", "secretary_local", "treasurer_local", "member"] 
+        },
+        "unitId": { "type": "string" },
+        "status": { 
+          "type": "string", 
+          "enum": ["active", "less_active", "inactive"] 
+        },
+        "lastAccess": { "type": "string", "format": "date-time" },
+        "photoURL": { "type": "string" },
+        "baptismDate": { "type": "string", "format": "date" }
+      },
+      "required": ["uid", "name", "email", "role", "unitId", "status"]
+    },
+    "Unit": {
+      "title": "Unit",
+      "description": "Church unit (Sede or Congregação)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["sede", "congregacao"] },
+        "address": { "type": "string" }
+      },
+      "required": ["id", "name", "type", "address"]
+    },
+    "PrayerRequest": {
+      "title": "PrayerRequest",
+      "description": "Member prayer request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "request": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["pending", "prayed"] }
+      },
+      "required": ["id", "request", "date", "status"]
+    },
+    "Finance": {
+      "title": "Finance",
+      "description": "Financial transaction",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "unitId": { "type": "string" },
+        "type": { "type": "string", "enum": ["tithe", "offering", "expense"] },
+        "amount": { "type": "number" },
+        "date": { "type": "string", "format": "date-time" },
+        "description": { "type": "string" },
+        "contributorId": { "type": "string" }
+      },
+      "required": ["id", "unitId", "type", "amount", "date"]
+    },
+    "Baptism": {
+      "title": "Baptism",
+      "description": "Baptism record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "memberId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["scheduled", "completed"] }
+      },
+      "required": ["id", "memberId", "date", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/units/{unitId}": {
+      "schema": "Unit",
+      "description": "Church units"
+    },
+    "/prayer_requests/{requestId}": {
+      "schema": "PrayerRequest",
+      "description": "Prayer requests"
+    },
+    "/finances/{financeId}": {
+      "schema": "Finance",
+      "description": "Financial records"
+    },
+    "/baptisms/{baptismId}": {
+      "schema": "Baptism",
+      "description": "Baptism records"
+    }
+  }
+}
